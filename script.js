@@ -1,64 +1,24 @@
+import { noteToColorMap, keyboardToNoteMap } from './mappings.js';
+
 let firstNotePlayed = false;
 
-const noteToColorMap = {
-  60: "#db3132",
-  61: "#d54bfa",
-  62: "#9f70f9",
-  63: "#819afe",
-  64: "#61acd7",
-  65: "#7bd8bc",
-  66: "#7bd559",
-  67: "#8fd833",
-  68: "#afbc2e",
-  69: "#d4a426",
-  70: "#e88e20",
-  71: "#e3936e",
-};
-
-const keyboardToNoteMap = {
-  q: 60,
-  w: 61,
-  e: 62,
-  r: 63,
-  t: 64,
-  y: 65,
-  u: 66,
-  i: 67,
-  o: 68,
-  p: 69,
-  a: 70,
-  s: 71,
-  d: 72,
-  f: 73,
-  g: 74,
-  h: 75,
-  j: 76,
-  k: 77,
-  l: 78,
-  z: 79,
-  x: 80,
-  c: 81,
-  v: 82,
-  b: 83,
-  n: 84,
-  m: 85,
-};
-
-document.addEventListener("keydown", function (event) {
-  const key = event.key.toLowerCase();
-  if (keyboardToNoteMap.hasOwnProperty(key)) {
-    const note = keyboardToNoteMap[key];
-    handleMIDIMessage({ data: [0x90, note, 127] });
-  }
-});
-
-document.addEventListener("keyup", function (event) {
-  const key = event.key.toLowerCase();
-  if (keyboardToNoteMap.hasOwnProperty(key)) {
-    const note = keyboardToNoteMap[key];
-    handleMIDIMessage({ data: [0x80, note, 0] });
-  }
-});
+document.addEventListener('keydown', function(event) {
+    const key = event.key.toLowerCase();
+    if (keyboardToNoteMap.hasOwnProperty(key)) {
+      const note = keyboardToNoteMap[key];
+      console.log(`Key down: ${key}, mapped to note: ${note}`); // Debug statement
+      handleMIDIMessage({ data: [0x90, note, 127] });
+    }
+  });
+  
+  document.addEventListener('keyup', function(event) {
+    const key = event.key.toLowerCase();
+    if (keyboardToNoteMap.hasOwnProperty(key)) {
+      const note = keyboardToNoteMap[key];
+      console.log(`Key up: ${key}, mapped to note: ${note}`); // Debug statement
+      handleMIDIMessage({ data: [0x80, note, 0] });
+    }
+  });
 
 function handleMIDIMessage(message) {
   const command = message.data[0];
