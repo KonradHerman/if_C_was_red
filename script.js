@@ -1,70 +1,103 @@
 let firstNotePlayed = false;
 
+const noteToColorMap = {
+  60: '#db3132',
+  61: '#d54bfa',
+  62: '#9f70f9',
+  63: '#819afe',
+  64: '#61acd7',
+  65: '#7bd8bc',
+  66: '#7bd559',
+  67: '#8fd833',
+  68: '#afbc2e',
+  69: '#d4a426',
+  70: '#e88e20',
+  71: '#e3936e'
+};
+
+const keyboardToNoteMap = {
+  'q': 60,
+  'w': 61,
+  'e': 62,
+  'r': 63,
+  't': 64,
+  'y': 65,
+  'u': 66,
+  'i': 67,
+  'o': 68,
+  'p': 69,
+  'a': 70,
+  's': 71,
+  'd': 72,
+  'f': 73,
+  'g': 74,
+  'h': 75,
+  'j': 76,
+  'k': 77,
+  'l': 78,
+  'z': 79,
+  'x': 80,
+  'c': 81,
+  'v': 82,
+  'b': 83,
+  'n': 84,
+  'm': 85
+};
+
+document.addEventListener('keydown', function(event) {
+  const key = event.key.toLowerCase();
+  if (keyboardToNoteMap.hasOwnProperty(key)) {
+    const note = keyboardToNoteMap[key];
+    handleMIDIMessage({ data: [0x90, note, 127] });
+  }
+});
+
+document.addEventListener('keyup', function(event) {
+  const key = event.key.toLowerCase();
+  if (keyboardToNoteMap.hasOwnProperty(key)) {
+    const note = keyboardToNoteMap[key];
+    handleMIDIMessage({ data: [0x80, note, 0] });
+  }
+});
+
 function handleMIDIMessage(message) {
-    const command = message.data[0];
-    const note = message.data[1];
-    const velocity = message.data.length > 2 ? message.data[2] : 0;
+  const command = message.data[0];
+  const note = message.data[1];
+  const velocity = message.data.length > 2 ? message.data[2] : 0;
 
-    if (!firstNotePlayed && velocity > 0) {
-        // Hide the headings when the first note is played
-        document.getElementById('main-title').style.display = 'none';
-        document.getElementById('sub-title').style.display = 'none';
-        firstNotePlayed = true;
+  if (!firstNotePlayed && velocity > 0) {
+    document.getElementById('main-title').style.display = 'none';
+    document.getElementById('sub-title').style.display = 'none';
+    firstNotePlayed = true;
+  }
+
+  if (velocity > 0) {
+    let baseNote = note % 12;
+    let octave = Math.floor(note / 12);
+
+    if (noteToColorMap.hasOwnProperty(baseNote)) {
+      let baseColor = noteToColorMap[baseNote];
+      let hsl = rgbToHsl(baseColor);
+      let newLightness = hsl[2] + (octave - 4) * 10;
+      newLightness = Math.max(0, Math.min(100, newLightness));
+      let newColor = `hsl(${hsl[0]}, ${hsl[1]}%, ${newLightness}%)`;
+      document.body.style.backgroundColor = newColor;
     }
-
-    if (velocity > 0) {
-        let baseNote = note % 12;
-        let octave = Math.floor(note / 12);
-
-        if (noteToColorMap.hasOwnProperty(baseNote)) {
-            let baseColor = noteToColorMap[baseNote];
-
-            // Convert the base color to HSL
-            let hsl = rgbToHsl(baseColor);
-            
-            // Adjust the lightness based on the octave
-            let newLightness = hsl[2] + (octave - 4) * 10;
-            newLightness = Math.max(0, Math.min(100, newLightness));
-            
-            // Create the new color
-            let newColor = `hsl(${hsl[0]}, ${hsl[1]}%, ${newLightness}%)`;
-
-            document.body.style.backgroundColor = newColor;
-        }
-    } else {
-        // Reset the background color when the note is released, if you want
-        // document.body.style.backgroundColor = 'initial';
-    }
+  }
 }
 
 function rgbToHsl(color) {
-    let r = parseInt(color.substring(1, 3), 16) / 255,
-        g = parseInt(color.substring(3, 5), 16) / 255,
-        b = parseInt(color.substring(5, 7), 16) / 255;
+  let r = parseInt(color.substring(1, 3), 16) / 255,
+      g = parseInt(color.substring(3, 5), 16) / 255,
+      b = parseInt(color.substring(5, 7), 16) / 255;
 
-    let max = Math.max(r, g, b),
-        min = Math.min(r, g, b);
-    
-    let h, s, l = (max + min) / 2;
+  let max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
 
-    if (max === min) {
-        h = s = 0; // achromatic
-    } else {
-        let d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        
-        switch (max) {
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-            case g: h = (b - r) / d + 2; break;
-            case b: h = (r - g) / d + 4; break;
-        }
-        
-        h /= 6;
-    }
-
-    h = Math.round(h * 360);
-    s = Math.round(s * 100);
-    l = Math.round(l * 100);
-
-    return [h, s, l];
-}
+  if (max === min) {
+    h = s = 0;
+  } else {
+    let d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b)
