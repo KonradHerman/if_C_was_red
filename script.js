@@ -41,9 +41,35 @@ function playSample(note) {
 // Function to change background color
 function changeBackgroundColor(note) {
   const color = noteToColorMap[note % 12];
-  document.body.style.backgroundColor = color;
-  console.log(`Changed background color to ${color}`);  // Debug statement
+
+  let r = parseInt(color.slice(1, 3), 16);
+  let g = parseInt(color.slice(3, 5), 16);
+  let b = parseInt(color.slice(5, 7), 16);
+
+  const octave = Math.floor(note / 12) - 1;
+  const baselineOctave = 4; // Middle C belongs to the 4th octave
+
+  const diff = octave - baselineOctave;
+
+  const upwardAdjustment = [12, 108, 108];
+  const downwardAdjustment = [110, 49, 47];
+
+  if (diff > 0) {
+    r = Math.min(255, r + upwardAdjustment[0] * diff);
+    g = Math.min(255, g + upwardAdjustment[1] * diff);
+    b = Math.min(255, b + upwardAdjustment[2] * diff);
+  } else if (diff < 0) {
+    r = Math.max(0, r - downwardAdjustment[0] * Math.abs(diff));
+    g = Math.max(0, g - downwardAdjustment[1] * Math.abs(diff));
+    b = Math.max(0, b - downwardAdjustment[2] * Math.abs(diff));
+  }
+
+  const newColor = "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
+  document.body.style.backgroundColor = newColor;
+
+  console.log(`Changed background color to ${newColor}`);
 }
+
 
 // Initialize MIDI
 navigator.requestMIDIAccess()
