@@ -1,0 +1,35 @@
+/* Reset default styles */
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: Arial, sans-serif;
+}
+
+/* Ensure the app container takes full height */
+#app {
+  height: 100%;
+  width: 100%;
+  display: flex; /* Use flexbox for centering */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: black; /* Default background */
+  transition: background-color 0.5s; /* Keep the transition */
+}
+
+/* Styles for initial text */
+h1, h2 {
+  margin: 0;
+  text-align: center; /* Center text */
+}
+
+#heading {
+  font-size: 3em;
+  margin-bottom: 20px;
+}
+
+#subheading {
+  font-size: 1.5em;
+}
