@@ -107,39 +107,29 @@
       synth = null; // Ensure it's nullified before creating new one
     }
 
-    try {
-       if (!isAudioReady) {
-           await Tone.start();
-           isAudioReady = true;
-           console.log("Audio context started.");
-       }
+    // --- No Tone.start() here initially ---
+    // We will call Tone.start() explicitly on the first user interaction within initAudio
 
-       console.log(`Setting up ${option.name}... Config:`, option.config);
+    console.log(`Setting up ${option.name}... Config:`, option.config);
 
-       // --- CONDITIONAL CREATION ---
-       if (option.synthType === Tone.Sampler) {
-           // Create Sampler directly
-           synth = new Tone.Sampler(option.config as Partial<Tone.SamplerOptions>).toDestination();
-           console.log(`Sampler created: ${option.name}. Waiting for samples...`);
-           // Sampler loads asynchronously, wait for it
-           await Tone.loaded(); // Ensure samples are loaded
-           console.log(`Sampler ready: ${option.name}`);
-       } else {
-           // Create PolySynth for other types (Synth, FMSynth, AMSynth)
-           // Note: We cast synthType to 'any' because PolySynth expects a constructor
-           // that strictly extends Monophonic, which our union type doesn't guarantee statically.
-           synth = new Tone.PolySynth(option.synthType as any, option.config).toDestination();
-           console.log(`PolySynth created: ${option.name}`);
-           // No explicit loading needed for basic synths
-           await Tone.loaded(); // Still good practice to await, though likely instant
-           console.log(`PolySynth ready: ${option.name}`);
-       }
-       // --- END CONDITIONAL CREATION ---
-
-    } catch (e) {
-       console.error("Error setting up synth:", e);
-       synth = null;
+    // --- CONDITIONAL CREATION ---
+    if (option.synthType === Tone.Sampler) {
+       // Create Sampler directly
+       synth = new Tone.Sampler(option.config as Partial<Tone.SamplerOptions>).toDestination();
+       console.log(`Sampler created: ${option.name}. Waiting for samples...`);
+       // Sampler loads asynchronously, wait for it
+       await Tone.loaded(); // Ensure samples are loaded
+       console.log(`Sampler ready: ${option.name}`);
+    } else {
+       // Create PolySynth for other types
+       synth = new Tone.PolySynth(option.synthType as any, option.config).toDestination();
+       console.log(`PolySynth created: ${option.name}`);
+       await Tone.loaded(); // Still good practice
+       console.log(`PolySynth ready: ${option.name}`);
     }
+    // --- END CONDITIONAL CREATION ---
+
+     // Don't set isAudioReady here yet, wait for Tone.start()
   }
 
   // Reactive statement to update synth when selection changes
@@ -148,88 +138,107 @@
     if (newOption && newOption !== selectedInstrumentConfig) {
       console.log("Instrument selection changed:", selectedInstrumentName);
       selectedInstrumentConfig = newOption;
-      // Re-initialize the synth with the new configuration
-      // Only if audio context is already started (or on the initial setup)
-      if (isAudioReady || !synth) { // Also setup if synth is null initially
-          setupSynth(selectedInstrumentConfig); // No await needed here, setupSynth handles async internally
-      }
+      // Just set up the synth definition, don't try to start audio context yet
+      // The next interaction will call initAudio which handles Tone.start()
+      setupSynth(selectedInstrumentConfig); // Re-setup synth structure
+      // Reset isAudioReady flag as the synth needs setup (though context might persist)
+      // We rely on initAudio to confirm readiness including Tone.start()
+      isAudioReady = false;
     }
   }
 
-  // Function to initialize AudioContext and the *initial* Tone.js synth safely
+  // Function to initialize AudioContext and ensure synth is ready
+  let isInitializing = false; // Prevent race conditions
   async function initAudio() {
-     if (!isAudioReady && !synth) { // Only run full init if not ready AND no synth exists
-        await setupSynth(selectedInstrumentConfig); // Setup initial synth
-     } else if (!isAudioReady) {
-         // If synth exists but context not started (unlikely scenario, but possible)
-         await Tone.start();
-         isAudioReady = true;
-         console.log("Audio context started (late).");
+     // Prevent multiple initializations running concurrently
+     if (isAudioReady || isInitializing) return;
+
+     isInitializing = true;
+     try {
+        // Start Tone.js Audio Context - THIS requires user gesture
+        if (Tone.context.state !== 'running') {
+            await Tone.start();
+            console.log("Audio context started by user interaction.");
+        }
+
+        // Ensure synth is created if it hasn't been already
+        if (!synth) {
+            console.log("Synth was null, setting up initial synth in initAudio.");
+            await setupSynth(selectedInstrumentConfig); // Await synth setup
+        } else if (synth instanceof Tone.Sampler && !synth.loaded) {
+             console.log("Sampler existed but wasn't loaded, awaiting Tone.loaded() in initAudio.");
+             await Tone.loaded(); // Ensure sampler is loaded if it already exists
+        } else if (!(synth instanceof Tone.Sampler) && !synth.volume) {
+            // PolySynth might exist but needs confirmation it's ready (e.g., after selection change)
+            console.log("PolySynth existed, ensuring readiness in initAudio.");
+            await Tone.loaded(); // Await potential internal setup
+        }
+
+        // Check if synth is now valid and ready
+        if (synth && ( (synth instanceof Tone.Sampler && synth.loaded) || !(synth instanceof Tone.Sampler) ) ) {
+             isAudioReady = true;
+             console.log("Audio and Synth are ready.");
+        } else {
+             console.error("Synth initialization failed within initAudio.");
+             isAudioReady = false; // Explicitly set to false
+        }
+
+     } catch (e) {
+        console.error("Error during audio initialization:", e);
+        isAudioReady = false; // Ensure flag is false on error
+     } finally {
+         isInitializing = false; // Allow future attempts if needed
      }
   }
 
   // Function to handle MIDI message
-  function handleMIDIMessage(message: WebMidi.MIDIMessageEvent) {
-    if (!isAudioReady || !synth) {
-        // Try to initialize audio if a message comes before interaction
-        // This might sometimes fail due to browser policies, but worth a try
-        initAudio().then(() => {
-            if (isAudioReady && synth) {
-                processMidiEvent(message);
-            }
-        });
-        return;
+  async function handleMIDIMessage(message: WebMidi.MIDIMessageEvent) { // Make async
+    // Try to initialize audio if a message comes before interaction
+    if (!isAudioReady) {
+        // Await initialization *before* processing the MIDI event
+        await initAudio();
+        // Check again if it succeeded
+        if (!isAudioReady || !synth) {
+             console.warn("Audio initialization failed or synth not ready after MIDI attempt.");
+             return; // Don't process if still not ready
+        }
+        // If initAudio succeeded, fall through to processMidiEvent
     }
+    // At this point, isAudioReady should be true if initialization worked
     processMidiEvent(message);
   }
 
+  // processMidiEvent remains synchronous, called only after audio is ready
   function processMidiEvent(message: WebMidi.MIDIMessageEvent) {
-     // Check if synth exists AND if it's a sampler, check if it's loaded
+     // Check synth readiness
      if (!synth || (synth instanceof Tone.Sampler && !synth.loaded)) {
-         console.warn("Synth not ready or sampler not loaded yet.");
+         console.warn("processMidiEvent called but synth not ready or sampler not loaded yet.");
          return;
      }
-     if (!synth) return; // Double check synth exists
 
      const command = message.data[0];
      const noteNumber = message.data[1];
-     const velocity = message.data.length > 2 ? message.data[2] : 0; // Raw velocity 0-127
-
-     // Convert MIDI note number to Tone.js frequency/note name format (e.g., "C4")
+     const velocity = message.data.length > 2 ? message.data[2] : 0;
      const noteName = Tone.Frequency(noteNumber, "midi").toNote();
-     // Normalize velocity to 0.0 - 1.0 for Tone.js volume/gain control
      const normalizedVelocity = velocity / 127;
 
      console.log(`MIDI: Cmd=${command}, Note=${noteNumber}(${noteName}), Vel=${velocity}(${normalizedVelocity.toFixed(2)})`);
 
      if (command === 144 && velocity > 0) { // Note on
-        initAudio();
-        hideText();
+        hideText(); // Hide text on first successful trigger
         synth.triggerAttack(noteName, Tone.now(), normalizedVelocity);
-
-        // Add note to visualizer state
         activeNotes.set(noteNumber, { id: noteNumber, noteNumber, velocity: normalizedVelocity });
-        updateActiveNotes(); // Trigger reactivity
+        updateActiveNotes();
      } else if (command === 128 || (command === 144 && velocity === 0)) { // Note off
-        // Release doesn't strictly need the loaded check, but doesn't hurt
         synth.triggerRelease(noteName, Tone.now());
-
-        // Remove note from visualizer state
         activeNotes.delete(noteNumber);
-        updateActiveNotes(); // Trigger reactivity
+        updateActiveNotes();
      }
   }
 
-  // REMOVED: Function to change background color
-  /*
-  function changeBackgroundColor(note: number, velocity: number) {
-    // ... function code ...
-  }
-  */
-
   // --- UPDATED Keyboard Handling ---
 
-  function handleKeyDown(event: KeyboardEvent) {
+  async function handleKeyDown(event: KeyboardEvent) { // Make async
     // Ignore repeats and keys not in our map
     if (event.repeat || pressedKeyboardKeys.has(event.key)) return;
     const noteNumber = keyboardToNoteMap[event.key];
@@ -237,38 +246,37 @@
 
     // Ensure audio context is started by user gesture first
     if (!isAudioReady) {
-        initAudio().then(() => {
-            // Only play if synth was successfully initialized
-            if (synth) {
-                triggerKeyboardAttack(noteNumber, event.key);
-            }
-        }).catch(e => console.error("Failed to init audio on keydown:", e));
+        // Await initialization *before* triggering the note
+        await initAudio();
+        // Check again if it succeeded before playing
+        if (isAudioReady && synth) {
+            triggerKeyboardAttack(noteNumber, event.key);
+        } else {
+            console.warn("Audio initialization failed or synth not ready after keydown attempt.");
+        }
     } else if (synth) {
         // Audio already ready, proceed to trigger note
         triggerKeyboardAttack(noteNumber, event.key);
     }
   }
 
+  // triggerKeyboardAttack remains synchronous, called only after audio is ready
   function triggerKeyboardAttack(noteNumber: number, key: string) {
-      // Check if synth exists AND if it's a sampler, check if it's loaded
+      // Double-check synth readiness (belt and braces)
       if (!synth || (synth instanceof Tone.Sampler && !synth.loaded)) {
-         console.warn("Synth not ready or sampler not loaded yet.");
+         console.warn("triggerKeyboardAttack called but synth not ready.");
          return;
       }
-      if (!synth) return;
 
       const noteName = Tone.Frequency(noteNumber, "midi").toNote();
-      const defaultVelocity = 0.7; // Use a reasonable default velocity for keyboard
-      const noteId = `key-${key}-${noteNumber}`; // Unique ID for visualizer
+      const defaultVelocity = 0.7;
+      const noteId = `key-${key}-${noteNumber}`;
 
-      hideText();
+      hideText(); // Hide text on first successful trigger
       synth.triggerAttack(noteName, Tone.now(), defaultVelocity);
       console.log(`Keyboard Down: Key=${key}, Note=${noteNumber}(${noteName}), Vel=${defaultVelocity}`);
 
-      // Store the pressed key and note info
       pressedKeyboardKeys.set(key, { noteName, noteId });
-
-      // Add to visualizer state
       activeNotes.set(noteId, { id: noteId, noteNumber, velocity: defaultVelocity });
       updateActiveNotes();
   }
@@ -296,7 +304,17 @@
     // Add keyup listener
     window.addEventListener('keyup', handleKeyUp);
 
-    // Initialize MIDI (no changes needed here)
+    // --- REMOVED initAudio() call from here ---
+
+    // Set up the initial synth structure *without* starting audio context
+    // This prepares the synth object based on the default selection.
+    // The actual Tone.start() and Tone.loaded() checks happen in initAudio on first interaction.
+    setupSynth(selectedInstrumentConfig).catch(e => {
+       console.error("Error during initial synth setup in onMount:", e);
+       // Handle potential errors in initial setup if necessary
+    });
+
+    // Initialize MIDI
     if (navigator.requestMIDIAccess) {
       navigator.requestMIDIAccess()
         .then(onMIDISuccess, onMIDIFailure);
@@ -335,15 +353,9 @@
       console.error(`Failed to get MIDI access - ${msg}`);
     }
 
-    // Remove sample loading logic
-    // const loadSamples = async () => { ... };
-    // if (audioContext) { ... } else { ... }
-
     // Cleanup function
     return () => {
-      // Remove keyup listener
       window.removeEventListener('keyup', handleKeyUp);
-
       // Cleanup MIDI listeners
       navigator.requestMIDIAccess?.().then(midiAccess => {
          midiAccess.onstatechange = null; // Remove state change listener first
@@ -358,14 +370,14 @@
       // Dispose of the synth and potentially close context if Tone doesn't handle it fully
       if (synth) {
           synth.dispose();
-          console.log("Synth disposed.");
-          synth = null; // Ensure it's nullified
+          console.log("Synth disposed on unmount.");
+          synth = null;
       }
        // Tone.context might still be running. Usually okay, but can force close if needed:
        // if (Tone.context.state === 'running') {
        //    Tone.context.close().then(() => console.log("AudioContext closed."));
        // }
-      isAudioReady = false; // Reset audio ready state
+      isAudioReady = false;
 
       // Clear any pending keyboard timeouts
       keyboardTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
@@ -396,7 +408,7 @@
   <!-- Conditionally render the initial text -->
   {#if !firstNotePlayed}
     <div class="initial-text">
-      <h1 id="heading">If C Was Red</h1>
+      <h1 id="heading">If C Is Red</h1>
       <h2 id="subheading">
         Press any note on your keyboard or MIDI controller and see it in color.
       </h2>
@@ -455,3 +467,4 @@
 
   /* You might need to adjust styles in app.css as well */
 </style>
+

@@ -14,17 +14,17 @@ export const noteToColorMap: { [key: number]: string } = {
 };
 
 export const keyboardToNoteMap: { [key: string]: number } = {
-  'q': 50,  // D3
-  'w': 51,  // D#3
-  'e': 52,  // E3
-  'r': 53,  // F3
-  't': 54,  // F#3
-  'y': 55,  // G3
-  'u': 56,  // G#3
-  'i': 57,  // A3
-  'o': 58,  // A#3
-  'p': 59,  // B3
-  'a': 60,  // Middle C (C4 in standard notation)
+  // Bottom Row (Notes below Middle C / C4)
+  'z': 53,  // F3
+  'x': 54,  // F#3
+  'c': 55,  // G3
+  'v': 56,  // G#3
+  'b': 57,  // A3
+  'n': 58,  // A#3
+  'm': 59,  // B3
+
+  // Middle Row (Starting Middle C / C4)
+  'a': 60,  // C4
   's': 61,  // C#4
   'd': 62,  // D4
   'f': 63,  // D#4
@@ -33,11 +33,16 @@ export const keyboardToNoteMap: { [key: string]: number } = {
   'j': 66,  // F#4
   'k': 67,  // G4
   'l': 68,  // G#4
-  'z': 69,  // A4
-  'x': 70,  // A#4
-  'c': 71,  // B4
-  'v': 72,  // C5
-  'b': 73,  // C#5
-  'n': 74,  // D5
-  'm': 75   // D#5
+
+  // Top Row (Notes above middle row)
+  'q': 69,  // A4
+  'w': 70,  // A#4
+  'e': 71,  // B4
+  'r': 72,  // C5
+  't': 73,  // C#5
+  'y': 74,  // D5
+  'u': 75,  // D#5
+  'i': 76,  // E5
+  'o': 77,  // F5
+  'p': 78   // F#5
 }; 
