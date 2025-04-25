@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skeuomorphic Synth Controls</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .control-panel {
+            background: linear-gradient(to bottom, #E8E8E8, #C8C8C8); /* Silver gradient */
+            border: 1px solid #888;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.5);
+            width: 450px; /* Increased width to fit side-by-side */
+            display: flex; /* Use flexbox for side-by-side layout */
+            gap: 30px; /* Space between sections */
+            align-items: flex-start; /* Align items to the top */
+        }
+
+        .control-section {
+            text-align: center;
+            flex: 1; /* Allow sections to grow */
+        }
+
+        .control-section h3 {
+            margin: 0 0 15px 0;
+            font-weight: 600;
+            color: #444;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            letter-spacing: 1px;
+        }
+
+        /* Dial Styles */
+        #instrument-dial-svg {
+            width: 200px; /* Control overall size */
+            height: 200px;
+            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
+        }
+
+        .dial-bezel {
+            fill: #D0D0D0;
+            stroke: #777;
+            stroke-width: 3;
+        }
+
+        .dial-face {
+            fill: #F5F5F5;
+            stroke: #AAA;
+            stroke-width: 1;
+        }
+
+        .dial-center-knob {
+            fill: #555;
+            stroke: #333;
+            stroke-width: 1;
+        }
+
+        .dial-label {
+            font-size: 11px;
+            font-family: 'Orbitron', sans-serif; /* Retro-techy font */
+            fill: #333;
+            text-anchor: middle;
+            text-transform: uppercase;
+        }
+
+        #dial-pointer {
+            stroke: #E53935; /* Red pointer */
+            stroke-width: 3;
+            stroke-linecap: round;
+            /* Rotation would be applied here via JS: transform: rotate(angle, 100, 100); */
+        }
+
+        /* Button Styles */
+        #visualizer-buttons-svg {
+            width: 180px; /* Control overall size */
+            height: 100px; /* Adjust height based on button layout */
+        }
+
+        .viz-button rect {
+            fill: linear-gradient(to bottom, #E0E0E0, #BDBDBD);
+            stroke: #757575;
+            stroke-width: 1px;
+            rx: 4; /* Rounded corners */
+            ry: 4;
+            transition: all 0.1s ease-out;
+            filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.2));
+        }
+
+        .viz-button text {
+            font-size: 12px;
+            fill: #212121;
+            text-anchor: middle;
+            font-weight: bold;
+            pointer-events: none; /* Allow clicks to pass through text to rect */
+        }
+
+        .viz-button:hover rect {
+            fill: linear-gradient(to bottom, #E8E8E8, #C8C8C8);
+            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
+        }
+
+        .viz-button:active rect,
+        .viz-button.active rect {
+            fill: linear-gradient(to top, #E0E0E0, #BDBDBD); /* Invert gradient */
+            filter: inset(1px 1px 3px rgba(0,0,0,0.3)); /* Pressed look */
+            transform: translateY(1px); /* Slight move down */
+        }
+
+        /* Add a retro font (optional) */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron&display=swap');
+
+    </style>
+</head>
+<body>
+
+    <div class="control-panel">
+
+        <div class="control-section" id="instrument-section">
+            <h3>Instrument</h3>
+            <svg id="instrument-dial-svg" viewBox="0 0 200 200">
+                <circle class="dial-bezel" cx="100" cy="100" r="95" />
+                <circle class="dial-face" cx="100" cy="100" r="88" />
+
+                <text class="dial-label" x="100" y="30">LEAD</text>
+                <text class="dial-label" x="170" y="100" dominant-baseline="middle">PAD</text>
+                <text class="dial-label" x="150" y="170">SEQ</text>
+                <text class="dial-label" x="50" y="170">ARP</text>
+                <text class="dial-label" x="30" y="100" dominant-baseline="middle">BASS</text>
+
+                <defs>
+                    <g id="tick-marks">
+                        <line x1="100" y1="12" x2="100" y2="20" stroke="#666" stroke-width="1.5"/>
+                        </g>
+                </defs>
+                <use href="#tick-marks" transform="rotate(0 100 100)"/>
+                <use href="#tick-marks" transform="rotate(60 100 100)"/>
+                <use href="#tick-marks" transform="rotate(120 100 100)"/>
+                <use href="#tick-marks" transform="rotate(180 100 100)"/>
+                <use href="#tick-marks" transform="rotate(240 100 100)"/>
+                <use href="#tick-marks" transform="rotate(300 100 100)"/>
+
+                <circle class="dial-center-knob" cx="100" cy="100" r="10" />
+
+                <g id="dial-pointer-group" transform="rotate(0 100 100)">
+                     <line id="dial-pointer" x1="100" y1="95" x2="100" y2="35"/>
+                </g>
+
+            </svg>
+        </div>
+
+        <div class="control-section" id="visualizer-section">
+            <h3>Visualizer</h3>
+            <svg id="visualizer-buttons-svg" viewBox="0 0 180 100">
+                <g class="viz-button" id="btn-scope" onclick="setActive(this)">
+                    <rect x="10" y="5" width="75" height="40" />
+                    <text x="47.5" y="30">SCOPE</text>
+                </g>
+                 <g class="viz-button" id="btn-bars" onclick="setActive(this)">
+                    <rect x="95" y="5" width="75" height="40" />
+                    <text x="132.5" y="30">BARS</text>
+                </g>
+                 <g class="viz-button active" id="btn-field" onclick="setActive(this)"> <rect x="10" y="55" width="75" height="40" />
+                    <text x="47.5" y="80">FIELD</text>
+                </g>
+                 <g class="viz-button" id="btn-lines" onclick="setActive(this)">
+                    <rect x="95" y="55" width="75" height="40" />
+                    <text x="132.5" y="80">LINES</text>
+                </g>
+            </svg>
+        </div>
+
+    </div>
+
+    <script>
+        // Basic JS to handle button active state (for mockup purposes)
+        function setActive(buttonElement) {
+            // Find all buttons within the same SVG parent
+            const buttons = buttonElement.parentElement.querySelectorAll('.viz-button');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            // Add active class to the clicked button
+            buttonElement.classList.add('active');
+
+            // In a real app, you'd trigger your visualizer change logic here
+            console.log("Selected Visualizer:", buttonElement.id.replace('btn-', ''));
+        }
+
+        // Placeholder for dial interaction (more complex)
+        const dialPointerGroup = document.getElementById('dial-pointer-group');
+        // Add event listeners (mousedown, mousemove, mouseup) to the dial SVG
+        // to calculate angle and update the 'transform' attribute of dialPointerGroup.
+        // Example: dialPointerGroup.setAttribute('transform', `rotate(${angle}, 100, 100)`);
+        console.log("Dial pointer ready for JS interaction.");
+
+    </script>
+
+</body>
+</html>

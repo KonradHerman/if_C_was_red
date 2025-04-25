@@ -1,11 +1,10 @@
 <script lang="ts">
   // Import only the color map
-  import { noteToColorMap } from './mappings';
+  import { noteToColorMap } from '../mappings'; // Path is now relative to visualizers/ directory
   // Import the type from App.svelte (use relative path)
-  import type { ActiveNote } from '../App.svelte';
+  import type { ActiveNote } from '../../App.svelte'; // Adjusted path
 
-  // Receive the list of active notes as a prop from App.svelte
-  // Use the imported ActiveNote type
+  // Receive the list of active notes as a prop
   export let activeNotes: Map<string | number, ActiveNote> = new Map();
 
   // Define dimensions for the visualizer area
@@ -18,11 +17,7 @@
   // --- Helper Functions ---
 
   function getNoteColor(noteNumber: number): string {
-    const baseColor = noteToColorMap[noteNumber % 12] || '#888888'; // Default grey
-    // Optional: Add octave adjustment logic back here if needed
-    // ... (octave adjustment code from previous versions) ...
-    // For simplicity now, just using base color
-    return baseColor;
+    return noteToColorMap[noteNumber % 12] || '#888888';
   }
 
   function getNoteYPosition(noteNumber: number): number {
@@ -44,16 +39,6 @@
      return viewBoxWidth / 2 + (noteInOctave - 5.5) * spreadFactor; // Center around 5.5 (between E and F)
   }
 
-  // Reactive calculation based on the activeNotes map
-  $: {
-    // Log whenever the activeNotes prop changes
-    console.log('Visualizer.svelte: Received activeNotes update', new Map(activeNotes));
-    notesToDisplay = Array.from(activeNotes.values());
-    // Log the array that will be used in the #each block
-    console.log('Visualizer.svelte: notesToDisplay array', notesToDisplay);
-  }
-  let notesToDisplay: ActiveNote[] = [];
-
 </script>
 
 <div class="visualizer-container">
@@ -64,31 +49,26 @@
     preserveAspectRatio="xMidYMid meet"
   >
     <defs>
-      <!-- Define radial gradients for each note dynamically -->
-      {#each notesToDisplay as note (note.id)}
-         <radialGradient id={`grad-${note.id}`} cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-           <!-- Use the calculated color -->
+      <!-- Iterate directly over the activeNotes Map -->
+      {#each activeNotes as [id, note] (id)}
+         <radialGradient id={`grad-${id}`} cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
            <stop offset="0%" style="stop-color:{getNoteColor(note.noteNumber)};stop-opacity:1" />
-           <!-- Fade to transparent -->
            <stop offset="100%" style="stop-color:{getNoteColor(note.noteNumber)};stop-opacity:0" />
          </radialGradient>
       {/each}
     </defs>
 
     <g class="notes-group">
-      <!-- Iterate over the array of active notes -->
-      {#each notesToDisplay as note (note.id)}
-        <!-- Log the properties of the note being rendered -->
+      <!-- Iterate directly over the activeNotes Map -->
+      {#each activeNotes as [id, note] (id)}
         {@const cx = getNoteXPosition(note.noteNumber)}
         {@const cy = getNoteYPosition(note.noteNumber)}
-        {@const color = getNoteColor(note.noteNumber)}
         {@const opacity = note.velocity}
-        <!-- console.log(`Visualizer.svelte: Rendering circle for id=${note.id}`, { cx, cy, color, opacity }) -->
         <circle
           cx={cx}
           cy={cy}
           r={baseRadius}
-          fill={`url(#grad-${note.id})`}
+          fill={`url(#grad-${id})`}
           opacity={opacity}
           style="transition: opacity 0.1s;"
         />
