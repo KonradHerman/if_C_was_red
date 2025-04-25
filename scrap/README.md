@@ -1,0 +1,1 @@
+throwing stuff in here that im getting from LLMs or elsewhere for inspiration

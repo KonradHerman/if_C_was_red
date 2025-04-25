@@ -1,4 +1,4 @@
-# If C Was Red
+# If C Is Red
 
-An expirement in time and space.
-Giving music a body.
+For anyone who likes music and color. 
+For anyone who has wondered what music might look like.
