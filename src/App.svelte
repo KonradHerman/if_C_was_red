@@ -217,7 +217,7 @@
 </script>
 
 <svelte:head>
-	<title>Svelte + Tone.js Synth</title>
+	<title>If C Is Red</title>
 </svelte:head>
 
 <main>
