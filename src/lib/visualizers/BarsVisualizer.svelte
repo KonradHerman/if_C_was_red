@@ -24,6 +24,7 @@
   // --- State ---
   interface RenderedBar {
     id: string | number;
+    uniqueId: string; // Add unique identifier for each instance
     noteNumber: number;
     velocity: number; // Store velocity for opacity
     color: string;
@@ -72,16 +73,26 @@
     const updateTime = performance.now(); // Timestamp for note start/end events
 
     // Use 'now' from the last animation frame for filtering consistency with rendering
-    const windowStartTime = now - timeWindowMs / 2; // Adjusted window center calculation
+    // Time corresponding to the right edge of the view box
     const windowEndTime = now + timeWindowMs / 2;
+    // Time corresponding to when a bar completely disappears off the left edge
+    const filterStartTime = now - timeWindowMs;
 
-    // 1. Filter out old bars whose visible duration (including fade) is entirely outside the window
+    // 1. Filter out old bars 
     const initialLength = renderedBars.length;
     let barsToKeep = renderedBars.filter(bar => {
-        const effectiveEndTime = bar.endTime ? bar.endTime + fadeOutDurationMs : Infinity;
-        // Keep if the bar's visible interval [startTime, effectiveEndTime] overlaps
-        // with the view window [windowStartTime, windowEndTime]
-        return bar.startTime < windowEndTime && effectiveEndTime > windowStartTime;
+        // Use Infinity for active notes, ensuring they are kept until they end
+        const effectiveEndTime = bar.endTime ?? Infinity;
+
+        // Condition 1: Keep if the note starts before the right edge of the view.
+        const startsBeforeViewEnd = bar.startTime < windowEndTime;
+
+        // Condition 2: Keep if the note's disappearance time is after the filter start time.
+        // For active notes (Infinity), this is always true.
+        // For ended notes, this ensures they are kept until fully off-screen.
+        const endsAfterFilterStart = effectiveEndTime > filterStartTime;
+
+        return startsBeforeViewEnd && endsAfterFilterStart;
     });
 
     let changed = false;
@@ -111,6 +122,7 @@
             color: getNoteColor(note.noteNumber),
             startTime: updateTime, // Use event time
             endTime: null,
+            uniqueId: `${note.id}-${updateTime}` // Generate unique ID
           };
           processedBars.push(newBar); // Add to the list being built
           changed = true;
@@ -126,39 +138,58 @@
     }
   });
 
-  // --- SVG Coordinate Calculation (Stationary Origin, Symmetric Expansion) ---
-  function calculateBarMetrics(bar: RenderedBar, currentTime: number): { 
-      halfWidth: number; y: number; opacity: number; isVisible: boolean 
+  // --- SVG Coordinate Calculation (Symmetrical Expansion & Outward Movement) ---
+  function calculateBarMetrics(bar: RenderedBar, currentTime: number): {
+      leftX: number; rightX: number; width: number; y: number; opacity: number; isVisible: boolean
   } {
     const y = getNoteYPosition(bar.noteNumber);
-    
-    let noteDurationMs = 0;
-    if (bar.endTime !== null) {
-      noteDurationMs = bar.endTime - bar.startTime;
+    const pixelsPerMs = pixelsPerSecond / 1000;
+
+    let leftX: number;
+    let rightX: number;
+    let width: number;
+
+    if (bar.endTime === null) {
+        // Note is active: Symmetrical expansion from center
+        const activeDurationMs = Math.max(0, currentTime - bar.startTime);
+        const halfWidth = (activeDurationMs * pixelsPerMs) / 2;
+        // Clamp width to avoid exceeding viewBox boundary visually during growth
+        width = Math.min(halfWidth, viewBoxTotalWidth / 2); 
+        leftX = -width;
+        rightX = 0; // Right rectangle starts at center
     } else {
-      noteDurationMs = currentTime - bar.startTime;
+        // Note has ended: Continue moving outwards
+        const finalDurationMs = Math.max(0, bar.endTime - bar.startTime);
+        const finalHalfWidth = (finalDurationMs * pixelsPerMs) / 2;
+        const elapsedSinceEndMs = Math.max(0, currentTime - bar.endTime);
+        // Adjust shift calculation for constant speed
+        const outwardShift = elapsedSinceEndMs * (pixelsPerMs / 2); 
+
+        // Width is fixed at the size it was when the note ended
+        width = Math.min(finalHalfWidth, viewBoxTotalWidth / 2); 
+        leftX = -(width + outwardShift); // Starts further left
+        rightX = outwardShift;         // Starts further right
     }
     
-    noteDurationMs = Math.max(0, noteDurationMs); 
+    // Clamp width to ensure it's not excessively large if time calculations are off
+    width = Math.max(0, width); 
 
-    const halfWidth = Math.min(
-        (noteDurationMs / 1000 * pixelsPerSecond) / 2, 
-        viewBoxTotalWidth / 2
-    ); 
+    let opacity = bar.velocity; // Base opacity on velocity
 
-    let opacity = bar.velocity;
+    // Determine visibility based on whether *either* rectangle overlaps the view box
+    const viewBoxStartX = -viewBoxTotalWidth / 2;
+    const viewBoxEndX = viewBoxTotalWidth / 2;
+    
+    const leftRectEndX = leftX + width;
+    const rightRectEndX = rightX + width;
 
-    if (bar.endTime !== null) {
-        const timeSinceEnd = currentTime - bar.endTime;
-        if (timeSinceEnd > 0) {
-            const fadeProgress = Math.min(1, timeSinceEnd / fadeOutDurationMs);
-            opacity *= (1 - fadeProgress); 
-        }
-    }
+    const leftVisible = leftX < viewBoxEndX && leftRectEndX > viewBoxStartX;
+    const rightVisible = rightX < viewBoxEndX && rightRectEndX > viewBoxStartX;
 
-    const isVisible = halfWidth > 0.1 && opacity > 0.01; 
+    // Bar is considered visible if either half is potentially visible and meets minimum width/opacity
+    const isVisible = (leftVisible || rightVisible) && width > 0.1 && opacity > 0.01;
 
-    return { halfWidth, y, opacity, isVisible };
+    return { leftX, rightX, width, y, opacity, isVisible };
   }
 
 </script>
@@ -170,29 +201,48 @@
     viewBox="{-viewBoxTotalWidth / 2} 0 {viewBoxTotalWidth} {viewBoxHeight}"
     preserveAspectRatio="xMidYMid meet"
   >
-    <g class="bars-group">
-      {#each renderedBars as bar (bar.id)}
+    <defs>
+      {#each renderedBars as bar (bar.uniqueId)}
         {@const metrics = calculateBarMetrics(bar, now)}
         {#if metrics.isVisible}
-          <!-- Left Rectangle -->
+          <!-- Gradient fades IN from Left edge (0% transparent -> 20% solid -> 100% solid) -->
+          <linearGradient id={`grad-fade-in-${bar.uniqueId}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color={bar.color} stop-opacity="0" />
+            <stop offset="5%" stop-color={bar.color} stop-opacity={metrics.opacity} />
+            <stop offset="90%" stop-color={bar.color} stop-opacity={metrics.opacity} />
+            <stop offset="100%" stop-color={bar.color} stop-opacity="0" />
+          </linearGradient>
+          <!-- Gradient fades OUT to Right edge (0% solid -> 80% solid -> 100% transparent) -->
+          <linearGradient id={`grad-fade-out-${bar.uniqueId}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color={bar.color} stop-opacity="0" />
+            <stop offset="10%" stop-color={bar.color} stop-opacity={metrics.opacity} />
+            <stop offset="95%" stop-color={bar.color} stop-opacity={metrics.opacity} />
+            <stop offset="100%" stop-color={bar.color} stop-opacity="0" />
+          </linearGradient>
+        {/if}
+      {/each}
+    </defs>
+    <g class="bars-group">
+      {#each renderedBars as bar (bar.uniqueId)}
+        {@const metrics = calculateBarMetrics(bar, now)}
+        {#if metrics.isVisible}
+          <!-- Left Rectangle (moves left, outer edge is left, needs fade IN from left) -->
           <rect
-            x={-metrics.halfWidth} 
+            x={metrics.leftX}
             y={metrics.y}
-            width={metrics.halfWidth}
+            width={metrics.width}
             height={barHeight}
-            fill={bar.color}
-            opacity={metrics.opacity}
-            shape-rendering="crispEdges" 
+            fill={`url(#grad-fade-in-${bar.uniqueId})`}
+            shape-rendering="crispEdges"
           />
-          <!-- Right Rectangle -->
+          <!-- Right Rectangle (moves right, outer edge is right, needs fade OUT to right) -->
            <rect
-            x={0}
+            x={metrics.rightX}
             y={metrics.y}
-            width={metrics.halfWidth}
+            width={metrics.width}
             height={barHeight}
-            fill={bar.color}
-            opacity={metrics.opacity}
-            shape-rendering="crispEdges" 
+            fill={`url(#grad-fade-out-${bar.uniqueId})`}
+            shape-rendering="crispEdges"
           />
         {/if}
       {/each}
